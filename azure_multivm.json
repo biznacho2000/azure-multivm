@@ -274,7 +274,7 @@
             "autoUpgradeMinorVersion": true,
             "settings": {
               "fileUris": [
-                "https://raw.githubusercontent.com/biznacho2000/azure_multivm/master/azureos.sh"
+                "https://raw.githubusercontent.com/biznacho2000/azure-multivm/master/azureos.sh"
               ],
               "commandToExecute": "sh azureos.sh"
             }
@@ -364,7 +364,7 @@
             "autoUpgradeMinorVersion": true,
             "settings": {
               "fileUris": [
-                "https://raw.githubusercontent.com/biznacho2000/vm-simple-sles/master/azureos.sh"
+                "https://raw.githubusercontent.com/biznacho2000/azure-multivm/master/azureos.sh"
               ],
               "commandToExecute": "sh azureos.sh"
             }
