@@ -1,0 +1,387 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "app1Name": {
+      "type": "string",
+      "metadata": {
+        "description": "Hostname for the app1 Virtual Machine."
+      }
+    },
+    "app2Name": {
+      "type": "string",
+      "metadata": {
+        "description": "Hostname for the app2 Virtual Machine."
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "User name for the Virtual Machine."
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password for the Virtual Machine."
+      }
+    },
+    "dnsapp1": {
+      "type": "string",
+      "metadata": {
+        "description": "Unique DNS Name for the Public IP used to access the app1 Virtual Machine."
+      }
+    },
+    "dnsapp2": {
+      "type": "string",
+      "metadata": {
+        "description": "Unique DNS Name for the Public IP used to access the app2 Virtual Machine."
+      }
+    },
+    "suseOSVersion": {
+      "type": "string",
+      "defaultValue": "12-SP3",
+      "allowedValues": [
+        "12-SP2",
+        "12-SP3"
+      ],
+      "metadata": {
+        "description": "The SLES version for the VM. This will pick the latest available image of this given SLES version."
+      }
+    },
+    "appsize": {
+      "allowedValues": [
+        "Standard_A1",
+        "Standard_D1_v2",
+        "Standard_D2_v2",
+        "Standard_D3_v2",
+        "Standard_D4_v2",
+        "Standard_D5_v2"
+      ],
+      "type": "string"
+    }
+  },
+  "variables": {
+    "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'slesvm')]",
+    "availabilitySetName": "myAvSet",
+    "app1nicName": "[concat(parameters('app1Name'), '-nic')]",
+    "app2nicName": "[concat(parameters('app2Name'), '-nic')]",
+    "addressPrefix": "10.0.0.0/16",
+    "subnetName": "Subnet",
+    "subnetPrefix": "10.0.0.0/24",
+    "app1Ip": "[concat(parameters('app1Name'), '-IP')]",
+    "app2Ip": "[concat(parameters('app2Name'), '-IP')]",
+    "virtualNetworkName": "[concat(parameters('app1Name'), '-VNET')]",
+    "subnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets/', variables('virtualNetworkName'), variables('subnetName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Compute/availabilitySets",
+      "name": "[variables('availabilitySetName')]",
+      "apiVersion": "2015-06-15",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "platformFaultDomainCount": 2,
+        "platformUpdateDomainCount": "5"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2017-06-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "Storage"
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2017-09-01",
+      "name": "[variables('app1Ip')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic",
+        "dnsSettings": {
+          "domainNameLabel": "[parameters('dnsapp1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2017-09-01",
+      "name": "[variables('app2Ip')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic",
+        "dnsSettings": {
+          "domainNameLabel": "[parameters('dnsapp2')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2017-09-01",
+      "name": "[variables('virtualNetworkName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[variables('addressPrefix')]"
+         ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('subnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('subnetPrefix')]"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2017-09-01",
+      "name": "[variables('app1nicName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[variables('app1Ip')]",
+        "[variables('virtualNetworkName')]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('app1Ip'))]"
+              },
+              "subnet": {
+                "id": "[variables('subnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2017-09-01",
+      "name": "[variables('app2nicName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[variables('app2Ip')]",
+        "[variables('virtualNetworkName')]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('app2Ip'))]"
+              },
+              "subnet": {
+                "id": "[variables('subnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2017-03-30",
+      "name": "[parameters('app1Name')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[variables('storageAccountName')]",
+        "[variables('app1nicName')]"
+      ],
+      "properties": {
+         "availabilitySet": {
+           "id": "[resourceId('Microsoft.Compute/availabilitySets',variables('availabilitySetName'))]"
+         },
+        "hardwareProfile": {
+          "vmSize": "[parameters('appsize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('app1Name')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "SUSE",
+            "offer": "SLES-SAP",
+            "sku": "[parameters('suseOSVersion')]",
+            "version": "2018.01.04"
+          },
+          "osDisk": {
+            "name": "[concat(parameters('app1Name'), '-osdisk')]",
+            "diskSizeGB": 500,
+            "vhd": {
+              "uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2017-06-01').primaryEndpoints.blob, 'vhds/',parameters('app1Name'),'-osdisk.vhd')]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          },
+          "dataDisks": [
+            {
+              "name": "[concat(parameters('app1Name'), '-datadisk1')]",
+              "diskSizeGB": 500,
+              "lun": 0,
+              "vhd": {
+                "uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2017-06-01').primaryEndpoints.blob, 'vhds/',parameters('app1Name'),'-datadisk1.vhd')]"
+              },
+              "createOption": "Empty"
+            }
+          ]
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('app1nicName'))]"
+            }
+          ]
+        },
+        "diagnosticsProfile": {
+          "bootDiagnostics": {
+            "enabled": true,
+            "storageUri": "[reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2017-06-01').primaryEndpoints.blob]"
+          }
+        }
+      },
+      "resources": [
+        {
+          "name": "scriptextension",
+          "type": "extensions",
+          "location": "[resourceGroup().location]",
+          "apiVersion": "2016-03-30",
+          "dependsOn": [
+            "[resourceId('Microsoft.Compute/virtualMachines', parameters('app1Name'))]"
+          ],
+          "tags": {
+            "displayName": "scriptextension"
+          },
+          "properties": {
+            "publisher": "Microsoft.OSTCExtensions",
+            "type": "CustomScriptForLinux",
+            "typeHandlerVersion": "1.4",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "fileUris": [
+                "https://raw.githubusercontent.com/biznacho2000/azure_multivm/master/azureos.sh"
+              ],
+              "commandToExecute": "sh azureos.sh"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2017-03-30",
+      "name": "[parameters('app2Name')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[variables('storageAccountName')]",
+        "[variables('app2nicName')]"
+      ],
+      "properties": {
+         "availabilitySet": {
+          "id": "[resourceId('Microsoft.Compute/availabilitySets',variables('availabilitySetName'))]"
+        },
+        "hardwareProfile": {
+          "vmSize": "[parameters('appsize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('app2Name')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "SUSE",
+            "offer": "SLES-SAP",
+            "sku": "[parameters('suseOSVersion')]",
+            "version": "2018.01.04"
+          },
+          "osDisk": {
+            "name": "[concat(parameters('app2Name'), '-osdisk')]",
+            "diskSizeGB": 500,
+            "vhd": {
+              "uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2017-06-01').primaryEndpoints.blob, 'vhds/',parameters('app2Name'),'-osdisk.vhd')]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          },
+          "dataDisks": [
+            {
+              "name": "[concat(parameters('app2Name'), '-datadisk1')]",
+              "diskSizeGB": 500,
+              "lun": 0,
+              "vhd": {
+                "uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2017-06-01').primaryEndpoints.blob, 'vhds/',parameters('app2Name'),'-datadisk1.vhd')]"
+              },
+              "createOption": "Empty"
+            }
+          ]
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('app2nicName'))]"
+            }
+          ]
+        },
+        "diagnosticsProfile": {
+          "bootDiagnostics": {
+            "enabled": true,
+            "storageUri": "[reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2017-06-01').primaryEndpoints.blob]"
+          }
+        }
+      },
+      "resources": [
+        {
+          "name": "scriptextension",
+          "type": "extensions",
+          "location": "[resourceGroup().location]",
+          "apiVersion": "2016-03-30",
+          "dependsOn": [
+            "[resourceId('Microsoft.Compute/virtualMachines', parameters('app2Name'))]"
+          ],
+          "tags": {
+            "displayName": "scriptextension"
+          },
+          "properties": {
+            "publisher": "Microsoft.OSTCExtensions",
+            "type": "CustomScriptForLinux",
+            "typeHandlerVersion": "1.4",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "fileUris": [
+                "https://raw.githubusercontent.com/biznacho2000/vm-simple-sles/master/azureos.sh"
+              ],
+              "commandToExecute": "sh azureos.sh"
+            }
+          }
+        }
+      ]
+    }
+  ],
+
+  "outputs": {
+    "hostname": {
+      "type": "string",
+      "value": "[reference(variables('app1Ip')).dnsSettings.fqdn]"
+    },
+    "sshCommand": {
+      "type": "string",
+      "value": "[concat('ssh ', parameters('adminUsername'), '@', reference(variables('hanaIp')).dnsSettings.fqdn)]"
+    }
+  }
+}
